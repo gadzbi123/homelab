@@ -1,0 +1,3 @@
+systemctl status smbd
+systemctl status cups
+systemctl status syncthing@gadzbi
