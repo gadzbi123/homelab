@@ -20,31 +20,12 @@ sudo systemctl restart cups
 sudo apt install samba
 sudo systemctl start samba
 
-echo "change or add lines below to /etc/samba/smb.conf and press Enter"
-cat << EOF
-[global]
-spoolss: architecture = Windows x64
-
-# CUPS printing.
-[printers]
-comment = All Printers
-browseable = no
-path = /var/spool/samba
-printable = yes
-guest ok = yes
-read only = yes
-create mask = 0700
-
-# Windows clients look for this share name as a source of downloadable
-# printer drivers
-[print$]
-comment = Printer Drivers
-path = /var/lib/samba/printers
-browseable = yes
-read only = no
-guest ok = no
-EOF
-read;
+echo "Changing /etc/samba/smb.conf"
+sudo cp /etc/samba/smb.conf /etc/samba/smb.bak
+sudo sed -ie 's@\[global\]@\[global\]\nspoolss: architecture = Windows x64@g;s@/var/tmp@/var/spool/samba@g;s@^   guest ok = no@   guest ok = yes@' /etc/samba/smb.conf
+echo "Adding ssh to PI"
+sudo systemctl enable ssh
+sudo systemctl start ssh
 echo "launch browser with address http://raspberrypi:631/ and add a printer"
 read;
 echo "Add printer on Windows -> https://wiki.ipfire.org/addons/cups"
