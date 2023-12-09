@@ -5,18 +5,19 @@ IFS=$'\n\t'
 echo "Starting printer script"
 echo "Script based on https://www.tomshardware.com/how-to/raspberry-pi-print-server"
 
-# maybe needed for samsung printers
+echo "Installing driver for Samsung CLX-3180"
+sudo apt install printer-driver-foo2zjs
 # sudo apt install printer-driver-splix
 
-# driver for samsung-clx-3185 printer
-sudo apt install printer-driver-foo2zjs
-
-# set up CUPS https://www.tomshardware.com/how-to/raspberry-pi-print-server
+echo "Adding static IP"
 sudo echo -e "interface wlan0 \nstatic ip_address=192.168.50.99/24 \nstatic routers=192.168.50.1 \nstatic domain_name_servers=192.168.50.1" > /etc/dhcpcd.conf
+
+echo "Setting up CUPS"
 sudo cupsctl --remote-any
+sudo usermod -a -G lpadmin gadzbi
 sudo systemctl restart cups
 
-# set up samba for Windows users
+echo "Setting up Samba for Windows x64"
 sudo apt install samba
 sudo systemctl start samba
 
@@ -26,8 +27,8 @@ sudo sed -ie 's@\[global\]@\[global\]\nspoolss: architecture = Windows x64@g;s@/
 echo "Adding ssh to PI"
 sudo systemctl enable ssh
 sudo systemctl start ssh
-echo "launch browser with address http://raspberrypi:631/ and add a printer"
+echo "launch browser with address http://raspberrypi:631/ and add a printer (REMEMBER to share it)"
 read;
-echo "Add printer on Windows -> https://wiki.ipfire.org/addons/cups"
-read;
+echo "Based on https://wiki.ipfire.org/addons/cups"
+echo "Add printers -> printer that isn't listed -> http://192.168.50.31:631/printers/Samsung_CLX-3180"
 echo "Print document and enjoy!"
