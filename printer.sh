@@ -5,8 +5,8 @@ IFS=$'\n\t'
 echo "Starting printer script"
 echo "Script based on https://www.tomshardware.com/how-to/raspberry-pi-print-server"
 
-echo "Installing driver for Samsung CLX-3180"
-sudo apt install printer-driver-foo2zjs
+echo "Installing driver for Samsung CLX-3180 and samba"
+sudo apt install printer-driver-foo2zjs samba
 # sudo apt install printer-driver-splix
 
 echo "Adding static IP"
@@ -18,7 +18,6 @@ sudo usermod -a -G lpadmin gadzbi
 sudo systemctl restart cups
 
 echo "Setting up Samba for Windows x64"
-sudo apt install samba
 sudo systemctl start samba
 
 echo "Changing /etc/samba/smb.conf"
