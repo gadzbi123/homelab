@@ -6,6 +6,14 @@ The point of this project was to get to know better the linux eco-system and inc
 Project contains several bash files, that might make it easier to set up the PI, such as
 remote printing within a local network, add support for Corsair Gaming Glaive RGB mouse, and access
  to locally stored notes.
+ 
+  
+Do NOT reboot the PI (via SSH) with ~~sudo reboot~~. Use:
+ ```
+sudo halt
+sudo shutdown -h now
+sudo shutdown -r now
+```
 
 ## Remote priniting
 

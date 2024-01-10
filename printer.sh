@@ -6,7 +6,7 @@ echo "Starting printer script"
 echo "Script based on https://www.tomshardware.com/how-to/raspberry-pi-print-server"
 
 echo "Installing driver for Samsung CLX-3180 and samba"
-sudo apt install printer-driver-foo2zjs samba
+sudo apt install printer-driver-foo2zjs samba -y
 # sudo apt install printer-driver-splix
 
 echo "Adding static IP"
