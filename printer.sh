@@ -30,4 +30,5 @@ echo "launch browser with address http://raspberrypi:631/ and add a printer (REM
 read;
 echo "Based on https://wiki.ipfire.org/addons/cups"
 echo "Add printers -> printer that isn't listed -> http://192.168.50.31:631/printers/Samsung_CLX-3180"
+echo "Make sure to set correct driver: Samsung CLX-3180 Series!"
 echo "Print document and enjoy!"
