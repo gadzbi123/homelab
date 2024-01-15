@@ -1,0 +1,4 @@
+sudo apt update -y && sudo apt upgrade -y && sudo apt install git -y
+git clone https://github.com/gadzbi123/Raspberry-Pi-as-Home-IOT.git
+sudo chmod +x Raspberry-Pi-as-Home-IOT/printer.sh
+sudo ./Raspberry-Pi-as-Home-IOT/printer.sh
