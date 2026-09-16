@@ -1,36 +1,52 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+# Share the USB-connected Samsung CLX-3180/3185 on the local network.
 set -euo pipefail
-IFS=$'\n\t'
 
-echo "Starting printer script"
-echo "Script based on https://www.bchemnet.com/suldr/index.html and https://www.tomshardware.com/how-to/raspberry-pi-print-server"
+# Include administrative commands when launched from cron or another service.
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_SUSPEND=1
 
-echo "Installing external repo for Samsung Drivers"
-sudo bash -c 'echo "deb https://www.bchemnet.com/suldr/ debian extra" >> /etc/apt/sources.list'
-gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv FB510D557CC3E840 
-gpg --export --armor FB510D557CC3E840 | sudo apt-key add -
-sudo apt update -y
+if (( EUID != 0 )); then
+    echo "Run as root: sudo ./printer.sh" >&2
+    exit 1
+fi
 
-echo "Installing driver for Samsung CLX-3180 and samba"
-sudo apt install suld-driver2-1.00.39hp suld-driver2-common-1 samba -y
+apt-get update
+apt-get install -y --no-install-recommends \
+    avahi-daemon cups cups-client printer-driver-foo2zjs
 
-echo "Adding static IP"
-sudo echo -e "interface wlan0 \nstatic ip_address=192.168.50.99/24 \nstatic routers=192.168.50.1 \nstatic domain_name_servers=192.168.50.1" > /etc/dhcpcd.conf
+systemctl enable --now cups avahi-daemon
 
-echo "Setting up CUPS"
-sudo cupsctl --remote-any
-sudo usermod -a -G lpadmin gadzbi
-sudo systemctl restart cups
+# Permit the account that invoked sudo to administer CUPS in a browser.
+[[ -z ${SUDO_USER:-} || $SUDO_USER == root ]] || usermod -aG lpadmin "$SUDO_USER"
 
-echo "Setting up Samba for Windows x64"
-sudo systemctl start samba
+printer_name=Samsung_CLX-3180
+device_uri=$(lpinfo -v | awk '
+    $1 == "direct" && tolower($2) ~ /^usb:\/\/samsung\/clx-3180/ {
+        print $2
+        exit
+    }
+')
+driver=$(lpinfo -m | awk '
+    tolower($0) ~ /samsung clx-3185/ && tolower($0) ~ /foo2qpdl/ {
+        print $1
+        exit
+    }
+')
 
-echo "Changing /etc/samba/smb.conf"
-sudo cp /etc/samba/smb.conf /etc/samba/smb.bak
-sudo sed -ie 's@\[global\]@\[global\]\nspoolss: architecture = Windows x64@g;s@/var/tmp@/var/spool/samba@g;s@^   guest ok = no@   guest ok = yes@' /etc/samba/smb.conf
-echo "launch browser with address http://raspberrypi:631/ and add a printer (REMEMBER to share it)"
-read;
-echo "Based on https://wiki.ipfire.org/addons/cups"
-echo "Add printers -> printer that isn't listed -> http://192.168.50.31:631/printers/Samsung_CLX-3180"
-echo "Make sure to set correct driver: Samsung CLX-3180 Series!"
-echo "Print document and enjoy!"
+[[ -n $device_uri ]] || { echo "Samsung CLX-3180 not found on USB" >&2; exit 1; }
+[[ -n $driver ]] || { echo "Samsung CLX-3185 driver not found" >&2; exit 1; }
+
+lpadmin -p "$printer_name" -E -v "$device_uri" -m "$driver" \
+    -D "Samsung CLX-3185" -L "Home" -o PageSize=A4 \
+    -o ColorMode=Color -o print-color-mode=color \
+    -o printer-is-shared=true
+
+# CUPS advertises the printer with Avahi and permits administration only on local LANs.
+cupsctl --share-printers --remote-admin --no-remote-any \
+    BrowseLocalProtocols=dnssd DefaultShared=Yes
+systemctl restart cups avahi-daemon
+
+echo "Printer ready at ipp://$(hostname -s).local:631/printers/$printer_name"
