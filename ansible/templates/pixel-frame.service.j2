@@ -1,0 +1,15 @@
+[Unit]
+Description=Animated Raspberry Pi framebuffer
+After=default.target
+ConditionPathExists={{ pixel_frame_device }}
+
+[Service]
+Type=simple
+WorkingDirectory={{ pixel_frame_install_dir }}
+ExecStart=/usr/bin/python3 {{ pixel_frame_install_dir }}/pixel_frame.py --device {{ pixel_frame_device }} --fps {{ pixel_frame_fps }} --start-scene {{ pixel_frame_start_scene }} --seconds-per-scene {{ pixel_frame_seconds_per_scene }} --day-seconds {{ pixel_frame_day_seconds }}
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+

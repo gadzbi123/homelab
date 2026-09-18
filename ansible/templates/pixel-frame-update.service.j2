@@ -1,0 +1,9 @@
+[Unit]
+Description=Validate and restart the updated animated frame
+
+[Service]
+Type=oneshot
+WorkingDirectory={{ pixel_frame_install_dir }}
+ExecStart=/usr/bin/python3 -m py_compile pixel_frame.py
+ExecStart=/usr/bin/systemctl --user restart pixel-frame.service
+

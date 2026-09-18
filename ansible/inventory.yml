@@ -1,0 +1,8 @@
+---
+all:
+  hosts:
+    pixel-frame:
+      ansible_connection: local
+      ansible_host: localhost
+      ansible_user: gadzbi
+

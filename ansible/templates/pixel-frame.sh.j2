@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+service=pixel-frame.service
+project={{ pixel_frame_install_dir | quote }}
+
+case "${1:-help}" in
+    start|stop|restart)
+        systemctl --user "$1" "$service"
+        ;;
+    status)
+        systemctl --user --no-pager status "$service"
+        ;;
+    logs)
+        journalctl --user -u "$service" -f
+        ;;
+    update)
+        ansible-playbook {{ pixel_frame_home | quote }}/homelab/ansible/site.yml --ask-become-pass
+        ;;
+    run)
+        scene="${2:-{{ pixel_frame_start_scene }}}"
+        systemctl --user stop "$service"
+        cd "$project"
+        echo "Running $scene in this TTY. Press Ctrl-C to stop and restore the cursor."
+        exec /usr/bin/python3 "$project/pixel_frame.py" --device {{ pixel_frame_device | quote }} --fps {{ pixel_frame_fps }} --start-scene "$scene"
+        ;;
+    *)
+        echo "Usage: pixel-frame {start|stop|restart|status|logs|update|run [scene]}"
+        ;;
+esac
+

@@ -1,0 +1,202 @@
+---
+- name: Configure the Raspberry Pi animated frame
+  hosts: pixel-frame
+  become: true
+
+  pre_tasks:
+    - name: Require Debian-family Linux
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "Debian"
+        fail_msg: This playbook currently supports Raspberry Pi OS and Debian.
+
+    - name: Look up the display account
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ pixel_frame_user }}"
+
+    - name: Set display account paths
+      ansible.builtin.set_fact:
+        pixel_frame_home: "{{ ansible_facts.getent_passwd[pixel_frame_user][4] }}"
+        pixel_frame_uid: "{{ ansible_facts.getent_passwd[pixel_frame_user][1] }}"
+
+  tasks:
+    - name: Install runtime and deployment packages
+      ansible.builtin.apt:
+        name:
+          - git
+          - console-setup
+          - network-manager
+          - python3
+          - python3-numpy
+          - python3-pil
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Configure the large text console font
+      ansible.builtin.template:
+        src: console-setup.j2
+        dest: /etc/default/console-setup
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Apply console font
+
+    - name: Enable NetworkManager
+      ansible.builtin.systemd_service:
+        name: NetworkManager.service
+        enabled: true
+        state: started
+
+    - name: Allow the display account to access the framebuffer
+      ansible.builtin.user:
+        name: "{{ pixel_frame_user }}"
+        groups: video
+        append: true
+      notify: Restart pixel frame
+
+    - name: Keep the user service manager running without an SSH login
+      ansible.builtin.command:
+        cmd: "loginctl enable-linger {{ pixel_frame_user }}"
+        creates: "/var/lib/systemd/linger/{{ pixel_frame_user }}"
+
+    - name: Create the project parent directory
+      ansible.builtin.file:
+        path: "{{ pixel_frame_install_dir | dirname }}"
+        state: directory
+        owner: "{{ pixel_frame_user }}"
+        group: "{{ pixel_frame_user }}"
+        mode: "0755"
+
+    - name: Check out the animated frame
+      become_user: "{{ pixel_frame_user }}"
+      ansible.builtin.git:
+        repo: "{{ pixel_frame_repo }}"
+        dest: "{{ pixel_frame_install_dir }}"
+        version: "{{ pixel_frame_version }}"
+        update: true
+        force: false
+      notify: Restart pixel frame
+
+    - name: Validate the renderer before service installation
+      become_user: "{{ pixel_frame_user }}"
+      ansible.builtin.command:
+        cmd: python3 -m py_compile pixel_frame.py
+        chdir: "{{ pixel_frame_install_dir }}"
+      changed_when: false
+
+    - name: Install the pixel-frame command
+      ansible.builtin.template:
+        src: pixel-frame.sh.j2
+        dest: /usr/local/bin/pixel-frame
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Create the user systemd directory
+      ansible.builtin.file:
+        path: "{{ pixel_frame_home }}/.config/systemd/user"
+        state: directory
+        owner: "{{ pixel_frame_user }}"
+        group: "{{ pixel_frame_user }}"
+        mode: "0755"
+
+    - name: Install pixel-frame user units
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "{{ pixel_frame_home }}/.config/systemd/user/{{ item }}"
+        owner: "{{ pixel_frame_user }}"
+        group: "{{ pixel_frame_user }}"
+        mode: "0644"
+      loop:
+        - pixel-frame.service
+        - pixel-frame-update.path
+        - pixel-frame-update.service
+      notify:
+        - Reload user systemd
+        - Restart pixel frame
+
+    - name: Configure console autologin for the dedicated display
+      ansible.builtin.file:
+        path: "/etc/systemd/system/getty@{{ pixel_frame_console }}.service.d"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: pixel_frame_console_autologin | bool
+
+    - name: Install console autologin for the dedicated display
+      ansible.builtin.template:
+        src: autologin.conf.j2
+        dest: "/etc/systemd/system/getty@{{ pixel_frame_console }}.service.d/autologin.conf"
+        owner: root
+        group: root
+        mode: "0644"
+      when: pixel_frame_console_autologin | bool
+      notify: Reload system systemd
+
+    - name: Remove managed console autologin when disabled
+      ansible.builtin.file:
+        path: "/etc/systemd/system/getty@{{ pixel_frame_console }}.service.d/autologin.conf"
+        state: absent
+      when: not (pixel_frame_console_autologin | bool)
+      notify: Reload system systemd
+
+    - name: Apply pending service changes
+      ansible.builtin.meta: flush_handlers
+
+    - name: Enable and start the display and update watcher
+      become_user: "{{ pixel_frame_user }}"
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ pixel_frame_uid }}"
+        DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ pixel_frame_uid }}/bus"
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        scope: user
+        enabled: true
+        state: started
+      loop:
+        - pixel-frame.service
+        - pixel-frame-update.path
+
+    - name: Verify the display service is running
+      become_user: "{{ pixel_frame_user }}"
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ pixel_frame_uid }}"
+        DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ pixel_frame_uid }}/bus"
+      ansible.builtin.command:
+        cmd: systemctl --user is-active pixel-frame.service
+      register: pixel_frame_active
+      changed_when: false
+      failed_when:
+        - pixel_frame_active.rc != 0
+        - pixel_frame_console_autologin | bool
+
+  handlers:
+    - name: Reload system systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Reload user systemd
+      become_user: "{{ pixel_frame_user }}"
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ pixel_frame_uid }}"
+        DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ pixel_frame_uid }}/bus"
+      ansible.builtin.systemd_service:
+        scope: user
+        daemon_reload: true
+
+    - name: Restart pixel frame
+      become_user: "{{ pixel_frame_user }}"
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ pixel_frame_uid }}"
+        DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ pixel_frame_uid }}/bus"
+      ansible.builtin.systemd_service:
+        name: pixel-frame.service
+        scope: user
+        state: restarted
+
+    - name: Apply console font
+      ansible.builtin.command: setupcon
+      changed_when: true

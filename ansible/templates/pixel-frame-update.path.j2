@@ -1,0 +1,10 @@
+[Unit]
+Description=Watch animated frame source for updates
+
+[Path]
+PathChanged={{ pixel_frame_install_dir }}/pixel_frame.py
+Unit=pixel-frame-update.service
+
+[Install]
+WantedBy=default.target
+
