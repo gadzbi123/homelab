@@ -25,7 +25,9 @@
       ansible.builtin.apt:
         name:
           - git
+          - ca-certificates
           - console-setup
+          - fbset
           - network-manager
           - python3
           - python3-numpy
@@ -33,6 +35,61 @@
         state: present
         update_cache: true
         cache_valid_time: 3600
+
+    - name: Install the Tailscale signing key
+      ansible.builtin.get_url:
+        url: https://pkgs.tailscale.com/stable/debian/{{ ansible_distribution_release }}.noarmor.gpg
+        dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+        owner: root
+        group: root
+        mode: "0644"
+      when: tailscale_enabled | bool
+
+    - name: Configure the Tailscale package repository
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/debian {{ ansible_distribution_release }} main"
+        filename: tailscale
+        state: present
+      when: tailscale_enabled | bool
+
+    - name: Install Tailscale
+      ansible.builtin.apt:
+        name: tailscale
+        state: present
+        update_cache: true
+      when: tailscale_enabled | bool
+
+    - name: Enable Tailscale daemon
+      ansible.builtin.systemd_service:
+        name: tailscaled.service
+        enabled: true
+        state: started
+      when: tailscale_enabled | bool
+
+    - name: Authenticate Tailscale when an auth key was supplied
+      ansible.builtin.command:
+        cmd: >-
+          tailscale up --auth-key={{ tailscale_auth_key }}
+          --hostname={{ tailscale_hostname }}
+          {% if tailscale_accept_routes | bool %}--accept-routes{% endif %}
+      no_log: true
+      when:
+        - tailscale_enabled | bool
+        - tailscale_auth_key | length > 0
+
+    - name: Check for the installed T3 Code binary
+      ansible.builtin.stat:
+        path: "{{ t3code_binary }}"
+      register: t3code_binary_stat
+      when: t3code_enabled | bool
+
+    - name: Require T3 Code to be installed before managing its service
+      ansible.builtin.assert:
+        that:
+          - t3code_binary_stat.stat.exists
+          - t3code_binary_stat.stat.executable
+        fail_msg: "T3 Code was not found at {{ t3code_binary }}; install T3 Code first or override t3code_binary."
+      when: t3code_enabled | bool
 
     - name: Configure the large text console font
       ansible.builtin.template:
@@ -117,6 +174,35 @@
         - Reload user systemd
         - Restart pixel frame
 
+    - name: Install T3 Code user service
+      ansible.builtin.template:
+        src: t3code.service.j2
+        dest: "{{ pixel_frame_home }}/.config/systemd/user/t3code.service"
+        owner: "{{ pixel_frame_user }}"
+        group: "{{ pixel_frame_user }}"
+        mode: "0644"
+      when: t3code_enabled | bool
+      notify:
+        - Reload user systemd
+        - Restart T3 Code
+
+    - name: Install monitor resize/status helper
+      ansible.builtin.template:
+        src: monitor-resize.sh.j2
+        dest: /usr/local/sbin/monitor-resize
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install monitor resize service
+      ansible.builtin.template:
+        src: monitor-resize.service.j2
+        dest: /etc/systemd/system/monitor-resize.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload system systemd
+
     - name: Configure console autologin for the dedicated display
       ansible.builtin.file:
         path: "/etc/systemd/system/getty@{{ pixel_frame_console }}.service.d"
@@ -160,6 +246,24 @@
         - pixel-frame.service
         - pixel-frame-update.path
 
+    - name: Enable and start T3 Code
+      become_user: "{{ pixel_frame_user }}"
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ pixel_frame_uid }}"
+        DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ pixel_frame_uid }}/bus"
+      ansible.builtin.systemd_service:
+        name: t3code.service
+        scope: user
+        enabled: true
+        state: started
+      when: t3code_enabled | bool
+
+    - name: Enable and run monitor resize/status check
+      ansible.builtin.systemd_service:
+        name: monitor-resize.service
+        enabled: true
+        state: started
+
     - name: Verify the display service is running
       become_user: "{{ pixel_frame_user }}"
       environment:
@@ -196,6 +300,17 @@
         name: pixel-frame.service
         scope: user
         state: restarted
+
+    - name: Restart T3 Code
+      become_user: "{{ pixel_frame_user }}"
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ pixel_frame_uid }}"
+        DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ pixel_frame_uid }}/bus"
+      ansible.builtin.systemd_service:
+        name: t3code.service
+        scope: user
+        state: restarted
+      when: t3code_enabled | bool
 
     - name: Apply console font
       ansible.builtin.command: setupcon

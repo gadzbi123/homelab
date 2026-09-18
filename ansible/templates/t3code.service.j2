@@ -1,0 +1,23 @@
+[Unit]
+Description=T3 Code server
+Wants=network-online.target
+After=network-online.target tailscaled.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory={{ pixel_frame_home }}
+Environment=T3CODE_HOME={{ t3code_home }}
+Environment=T3_BOOT_SERVICE_UNIT=t3code.service
+ExecStart={{ t3code_binary }} __service-launcher
+KillMode=mixed
+OOMPolicy=continue
+Restart=always
+RestartSec=5
+StandardOutput=append:{{ t3code_home }}/userdata/logs/boot-service.log
+StandardError=append:{{ t3code_home }}/userdata/logs/boot-service.log
+
+[Install]
+WantedBy=default.target
+

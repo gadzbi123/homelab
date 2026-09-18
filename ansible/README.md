@@ -4,7 +4,8 @@ This playbook turns a Debian/Raspberry Pi OS machine into the unattended
 animated framebuffer currently used by the Raspberry Pi. It installs all
 runtime packages, checks out the artwork, configures access and user lingering,
 installs the systemd units and CLI, enables unattended startup, and verifies the
-service.
+service. It also installs/enables Tailscale, manages the existing T3 Code user
+service, and installs a monitor detection/resize hook.
 
 ## Deploy locally
 
@@ -41,6 +42,19 @@ ansible-playbook site.yml --ask-become-pass
 Settings such as frame rate, initial scene, Git revision, device, and console
 are in `group_vars/all.yml`. Host-specific overrides can be placed in
 `host_vars/pixel-frame.yml`.
+
+Tailscale is installed and enabled automatically. To authenticate a new node,
+store `tailscale_auth_key` in Ansible Vault and pass the vault file when running
+the playbook. Leaving it empty preserves an existing Tailscale login. The
+playbook never commits a key.
+
+T3 Code must already be installed by its official installer; Ansible verifies
+the configured binary and owns the boot service afterward. Override
+`t3code_binary` when the installed version is different.
+
+The monitor helper reports the live framebuffer dimensions with `fbset` and
+optionally runs `monitor_resize_command`. The animated renderer itself reads
+the framebuffer dimensions at runtime, so no fixed HDMI mode is required.
 
 The playbook installs and enables NetworkManager and configures the TTY with a
 large Terminus `16x32` font. Change `console_font_face` or `console_font_size`

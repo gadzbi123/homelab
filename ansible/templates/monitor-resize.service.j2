@@ -1,0 +1,12 @@
+[Unit]
+Description=Detect and optionally configure the connected monitor
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/monitor-resize
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+
