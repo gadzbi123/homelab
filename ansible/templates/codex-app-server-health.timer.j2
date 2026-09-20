@@ -1,0 +1,10 @@
+[Unit]
+Description=Keep Codex app-server daemon available
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -32,6 +32,11 @@ t3code_enabled: true
 t3code_binary: "{{ pixel_frame_home | default('/home/' ~ pixel_frame_user) }}/.t3/runtime/versions/0.0.42/t3"
 t3code_home: "{{ pixel_frame_home | default('/home/' ~ pixel_frame_user) }}/.t3"
 
+# Codex app-server health supervision. Codex is installed by its own installer;
+# Ansible manages the recovery timer only.
+codex_enabled: true
+codex_binary: "{{ pixel_frame_home | default('/home/' ~ pixel_frame_user) }}/.local/bin/codex"
+
 # The framebuffer renderer scales to the detected monitor resolution. An
 # optional command can force a platform-specific mode (for example an xrandr
 # command on a desktop); empty means detect and report only.

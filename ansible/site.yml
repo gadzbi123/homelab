@@ -91,6 +91,20 @@
         fail_msg: "T3 Code was not found at {{ t3code_binary }}; install T3 Code first or override t3code_binary."
       when: t3code_enabled | bool
 
+    - name: Check for the installed Codex binary
+      ansible.builtin.stat:
+        path: "{{ codex_binary }}"
+      register: codex_binary_stat
+      when: codex_enabled | bool
+
+    - name: Require Codex to be installed before managing its health timer
+      ansible.builtin.assert:
+        that:
+          - codex_binary_stat.stat.exists
+          - codex_binary_stat.stat.executable
+        fail_msg: "Codex was not found at {{ codex_binary }}; install Codex first or override codex_binary."
+      when: codex_enabled | bool
+
     - name: Configure the large text console font
       ansible.builtin.template:
         src: console-setup.j2
@@ -186,6 +200,19 @@
         - Reload user systemd
         - Restart T3 Code
 
+    - name: Install Codex app-server health units
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "{{ pixel_frame_home }}/.config/systemd/user/{{ item }}"
+        owner: "{{ pixel_frame_user }}"
+        group: "{{ pixel_frame_user }}"
+        mode: "0644"
+      loop:
+        - codex-app-server-health.service
+        - codex-app-server-health.timer
+      when: codex_enabled | bool
+      notify: Reload user systemd
+
     - name: Install monitor resize/status helper
       ansible.builtin.template:
         src: monitor-resize.sh.j2
@@ -257,6 +284,18 @@
         enabled: true
         state: started
       when: t3code_enabled | bool
+
+    - name: Enable and start Codex app-server health timer
+      become_user: "{{ pixel_frame_user }}"
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ pixel_frame_uid }}"
+        DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ pixel_frame_uid }}/bus"
+      ansible.builtin.systemd_service:
+        name: codex-app-server-health.timer
+        scope: user
+        enabled: true
+        state: started
+      when: codex_enabled | bool
 
     - name: Enable and run monitor resize/status check
       ansible.builtin.systemd_service:

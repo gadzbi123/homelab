@@ -52,6 +52,11 @@ T3 Code must already be installed by its official installer; Ansible verifies
 the configured binary and owns the boot service afterward. Override
 `t3code_binary` when the installed version is different.
 
+Codex must already be installed by its official installer. When
+`codex_enabled` is true, Ansible installs a per-user systemd timer that checks
+the Codex app-server every minute and starts it again if its control socket is
+missing. Override `codex_binary` when the installed binary is elsewhere.
+
 The monitor helper reports the live framebuffer dimensions with `fbset` and
 optionally runs `monitor_resize_command`. The animated renderer itself reads
 the framebuffer dimensions at runtime, so no fixed HDMI mode is required.

@@ -1,0 +1,6 @@
+[Unit]
+Description=Check Codex app-server daemon health
+
+[Service]
+Type=oneshot
+ExecStart={{ codex_binary }} app-server daemon start
