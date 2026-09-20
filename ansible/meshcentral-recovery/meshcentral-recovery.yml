@@ -1,0 +1,93 @@
+---
+- name: Back up or restore MeshCentral configuration
+  hosts: meshcentral_recovery
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - vars/meshcentral_config.yml
+
+  vars:
+    meshcentral_config_path: /var/lib/meshcentral/data/config.json
+    meshcentral_recovery_dir: /home/gadzbi/meshcentral-recovery
+    meshcentral_recovery_user: gadzbi
+    meshcentral_service_name: meshcentral
+    meshcentral_restore: false
+    meshcentral_restart_service: false
+
+  tasks:
+    - name: Ensure the recovery directory exists
+      ansible.builtin.file:
+        path: "{{ meshcentral_recovery_dir }}"
+        state: directory
+        owner: "{{ meshcentral_recovery_user }}"
+        group: "{{ meshcentral_recovery_user }}"
+        mode: "0700"
+
+    - name: Check the live MeshCentral configuration
+      ansible.builtin.stat:
+        path: "{{ meshcentral_config_path }}"
+      register: meshcentral_config_stat
+
+    - name: Require the live configuration to exist
+      ansible.builtin.assert:
+        that:
+          - meshcentral_config_stat.stat.exists
+          - meshcentral_config_stat.stat.isreg
+        fail_msg: "MeshCentral configuration was not found at {{ meshcentral_config_path }}."
+
+    - name: Create a timestamped backup before restore
+      ansible.builtin.copy:
+        src: "{{ meshcentral_config_path }}"
+        dest: "{{ meshcentral_recovery_dir }}/config.json.{{ ansible_date_time.iso8601_basic_short }}"
+        remote_src: true
+        owner: "{{ meshcentral_recovery_user }}"
+        group: "{{ meshcentral_recovery_user }}"
+        mode: "0600"
+      when: meshcentral_restore | bool
+
+    - name: Save the live configuration in the local recovery directory
+      ansible.builtin.copy:
+        src: "{{ meshcentral_config_path }}"
+        dest: "{{ meshcentral_recovery_dir }}/config.json"
+        remote_src: true
+        owner: "{{ meshcentral_recovery_user }}"
+        group: "{{ meshcentral_recovery_user }}"
+        mode: "0600"
+      when: not (meshcentral_restore | bool)
+
+    - name: Restore the encrypted repository snapshot
+      ansible.builtin.copy:
+        content: "{{ meshcentral_config_json }}\n"
+        dest: "{{ meshcentral_config_path }}"
+        owner: root
+        group: root
+        mode: "0600"
+        validate: "python3 -m json.tool %s"
+        backup: true
+      when: meshcentral_restore | bool
+      notify: Restart MeshCentral
+
+    - name: Record the current live configuration checksum
+      ansible.builtin.stat:
+        path: "{{ meshcentral_config_path }}"
+        checksum_algorithm: sha256
+      register: meshcentral_final_stat
+
+    - name: Write recovery metadata
+      ansible.builtin.copy:
+        content: |
+          MeshCentral config path: {{ meshcentral_config_path }}
+          SHA-256: {{ meshcentral_final_stat.stat.checksum }}
+          Last playbook action: {{ 'restore' if (meshcentral_restore | bool) else 'backup/check' }}
+        dest: "{{ meshcentral_recovery_dir }}/README.txt"
+        owner: "{{ meshcentral_recovery_user }}"
+        group: "{{ meshcentral_recovery_user }}"
+        mode: "0600"
+
+  handlers:
+    - name: Restart MeshCentral
+      ansible.builtin.service:
+        name: "{{ meshcentral_service_name }}"
+        state: restarted
+      when: meshcentral_restart_service | bool
