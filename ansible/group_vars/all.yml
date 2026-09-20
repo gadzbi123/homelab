@@ -2,10 +2,10 @@
 # Override these in host_vars/<hostname>.yml or with -e key=value.
 pixel_frame_user: "{{ ansible_user }}"
 pixel_frame_repo: https://github.com/gadzbi123/pixel-frame.git
-pixel_frame_version: main
+pixel_frame_version: animated
 pixel_frame_install_dir: "/home/{{ pixel_frame_user }}/pixel-frame"
 pixel_frame_device: /dev/fb0
-pixel_frame_fps: 4
+pixel_frame_fps: 8
 pixel_frame_start_scene: woodland
 pixel_frame_seconds_per_scene: 720
 pixel_frame_day_seconds: 120
